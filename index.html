@@ -638,6 +638,17 @@ let auth=null, db=null, fbOK=false;
 try{ if(typeof firebase!=="undefined"){ firebase.initializeApp(firebaseConfig); auth=firebase.auth(); db=firebase.firestore(); fbOK=true; } }
 catch(e){ console.warn("Firebase indisponível, usando modo local:", e.message); }
 
+/* ============================================================
+   ISOLAMENTO POR PLATAFORMA (correção do "sumiço/mistura" das anotações)
+   >>> Em CADA plataforma, troque APENAS o valor abaixo. <<<
+   Ex.: 'cirurgia-geral', 'psiquiatria', 'osce-revalida', ...
+   Cada plataforma passa a ter a sua própria "gaveta" e nunca
+   mais sobrescreve nem mistura os dados das outras.
+   ============================================================ */
+const PLATFORM_ID = "ginecologia";
+function platformDoc(){ return db.collection("users").doc(currentUser.uid).collection("platforms").doc(PLATFORM_ID); }
+function summaryDoc(){ return db.collection("users").doc(currentUser.uid).collection("summaries").doc(PLATFORM_ID); }
+
 const GATE_PASS = "REVALIDA22528129";
 
 /* ---- A JORNADA DO CICLO MENSTRUAL (substitui XP/níveis) ---- */
@@ -1097,10 +1108,10 @@ function queueSave(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async()=>{
     try{
-      await db.collection("users").doc(currentUser.uid).set(state, {merge:true});
-      // coleção dedicada cycleProgress (conforme especificação)
+      await platformDoc().set(state, {merge:false});
+      // resumo de gamificação — agora isolado por usuário E por plataforma
       const c = state.cycle||{};
-      await db.collection("cycleProgress").doc(currentUser.uid).set({
+      await summaryDoc().set({
         currentPhase: c.currentPhase||"menstr",
         cyclePercentage: c.cyclePercentage||0,
         completedStages: c.completedStages||[],
@@ -1120,7 +1131,7 @@ async function loadState(){
   let loaded=null;
   if(fbOK && currentUser){
     try{
-      const doc = await db.collection("users").doc(currentUser.uid).get();
+      const doc = await platformDoc().get();
       if(doc.exists) loaded = doc.data();
     }catch(e){ console.warn("load Firestore falhou:", e.message); }
   }
